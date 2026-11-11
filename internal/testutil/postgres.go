@@ -43,9 +43,21 @@ func NewStore(t *testing.T) *store.Store {
 	if err := st.WaitHealthy(ctx); err != nil {
 		t.Fatalf("ping: %v", err)
 	}
+	if err := acquireDBTestLock(ctx, st); err != nil {
+		t.Fatalf("advisory lock: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = st.Pool().Exec(context.Background(), `SELECT pg_advisory_unlock(88001)`)
+	})
+
 	truncate(t, st)
 	t.Cleanup(func() { truncate(t, st) })
 	return st
+}
+
+func acquireDBTestLock(ctx context.Context, st *store.Store) error {
+	_, err := st.Pool().Exec(ctx, `SELECT pg_advisory_lock(88001)`)
+	return err
 }
 
 func truncate(t *testing.T, st *store.Store) {

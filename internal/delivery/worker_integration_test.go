@@ -72,8 +72,11 @@ func TestWorkerDeliverSuccessHMAC(t *testing.T) {
 		t.Fatal("sink did not receive valid HMAC")
 	}
 	wh, err := st.GetWebhook(ctx, id)
-	if err != nil || wh.Status != store.StatusDelivered {
-		t.Fatalf("status=%s err=%v", wh.Status, err)
+	if err != nil {
+		t.Fatalf("get webhook: %v", err)
+	}
+	if wh.Status != store.StatusDelivered {
+		t.Fatalf("status=%s", wh.Status)
 	}
 }
 
