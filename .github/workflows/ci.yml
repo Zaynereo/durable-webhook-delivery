@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: webhook
+          POSTGRES_PASSWORD: webhook
+          POSTGRES_DB: webhooks
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U webhook -d webhooks"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://webhook:webhook@localhost:5432/webhooks?sslmode=disable
+      HMAC_SECRET: test-hmac-secret
+      ALLOWED_DESTINATIONS: http://127.0.0.1:0/webhook
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+      - name: Download modules
+        run: go mod download
+      - name: Vet
+        run: go vet ./...
+      - name: Unit tests (race)
+        run: go test -race -count=1 ./internal/destination/... ./internal/hmacsig/...
+      - name: Integration tests (race)
+        run: go test -race -count=1 ./internal/store/... ./internal/api/... ./internal/delivery/...
+      - name: Build binaries
+        run: |
+          go build -o /dev/null ./cmd/api
+          go build -o /dev/null ./cmd/worker
+          go build -o /dev/null ./cmd/sink
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docker build api
+        run: docker build --build-arg TARGET=api -t webhook-api:ci .
+      - name: Docker build worker
+        run: docker build --build-arg TARGET=worker -t webhook-worker:ci .
+      - name: Docker build sink
+        run: docker build --build-arg TARGET=sink -t webhook-sink:ci .
